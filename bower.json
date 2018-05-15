@@ -1,0 +1,19 @@
+{
+  "name": "purescript-super-circle",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "output"
+  ],
+  "dependencies": {
+    "purescript-prelude": "^3.3.0",
+    "purescript-console": "^3.0.0",
+    "purescript-drawing": "^3.0.0",
+    "purescript-behaviors": "^6.3.0",
+    "purescript-debug": "^3.0.0"
+  },
+  "devDependencies": {
+    "purescript-psci-support": "^3.0.0"
+  }
+}
