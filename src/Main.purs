@@ -1,32 +1,26 @@
 module Main where
 
+import Prelude
+
 import Color (black, graytone, rotateHue, white)
 import Color.Scheme.MaterialDesign (red)
 import Control.Apply (lift3)
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Console (logShow)
 import Data.Int (toNumber)
 import Data.Maybe (Maybe(..))
-import Data.Monoid (mempty)
 import Data.Set (Set, member)
-import Debug.Trace (spy)
+import Data.Time.Duration (Seconds(..))
+import Effect (Effect)
+import Effect.Class.Console (logShow)
 import FRP.Behavior (Behavior, animate, fixB)
 import FRP.Behavior.Keyboard (keys)
 import FRP.Behavior.Time (seconds)
+import FRP.Event.Keyboard (Keyboard, getKeyboard)
 import Graphics.Canvas (getCanvasElementById, getContext2D, setCanvasHeight, setCanvasWidth)
 import Graphics.Drawing (Color, Drawing, Shape, OutlineStyle, arc, circle, fillColor, filled, lineWidth, outlineColor, outlined, rectangle, render, rotate, text, translate)
 import Graphics.Drawing.Font (font, monospace)
-import Math (cos, floor, log, pi, sin, (%))
-
-import Prelude
+import Math (cos, floor, sin, tau, (%))
 
 {- UPDATE -}
-
--- | A way more useful constant.
-
-tau :: Number
-tau
-  = 2.0 * pi
 
 -- | Round a number down to the nearest whole multiple another number. We're
 -- | firing new obstacles every 2 seconds, so we can use this to work out when
@@ -81,15 +75,15 @@ avoidsObstacle cursor obstacleStartTime
 -- | should at least _seem_ random.
 
 scoreToDirection :: Number -> Number
-scoreToDirection score
-  = 2.0 * (((score * 31.0) % 17.0) % 2.0) - 1.0
+scoreToDirection score'
+  = 2.0 * (((score' * 31.0) % 17.0) % 2.0) - 1.0
 
 -- | Every time we want to render a frame, we should update state accordingly.
 -- | To do this, we calculate the new score (if it has changed), new position
 -- | of the cursor (if it has changed), and where to draw the obstacle.
 
-update :: Number -> Maybe Controls -> State -> State
-update timestamp control previous
+update :: Seconds -> Maybe Controls -> State -> State
+update (Seconds timestamp) control previous
   = { timestamp
     , cursorRotation: normalise cursorRotation
     , gameRotation: normalise gameRotation
@@ -307,18 +301,18 @@ data Controls
 -- | what move the user is trying to make. This function reports, based on the
 -- | keys pressed, what move the user wants to make (if any!).
 
-keysToControls :: Set Int -> Maybe Controls
+keysToControls :: Set String -> Maybe Controls
 keysToControls keys
-  | 37 `member` keys = Just Anticlockwise
-  | 39 `member` keys = Just Clockwise
+  | "ArrowLeft" `member` keys = Just Anticlockwise
+  | "ArrowRight" `member` keys = Just Clockwise
   | otherwise            = Nothing
 
 -- | Applying the above function to the stream of pressed keys gives us a
 -- | stream of desired controls.
 
-controls :: Behavior (Maybe Controls)
-controls
-  = map keysToControls keys
+controls :: Keyboard -> Behavior (Maybe Controls)
+controls keyboard
+  = map keysToControls (keys keyboard)
 
 -- | Given that we're maybe making a move, we need to convert this move into a
 -- | "velocity". Honestly, I couldn't think of a better word for this: we're
@@ -342,23 +336,23 @@ controlToVelocity = case _ of
 -- | we only apply two of those to `update` - `seconds` and `controls`. The
 -- | third argument is the state stream, so we can access previous state.
 
-loop :: Behavior State
-loop
-  = fixB initialState (lift3 update seconds controls)
+loop :: Keyboard -> Behavior State
+loop keyboard
+  = fixB initialState (lift3 update seconds (controls keyboard))
 
 -- | Once we've got a stream of state updates, we can just apply each iteration
 -- | to the `paint` function to get each frame of our animation. `map` takes an
 -- | `a -> b` and transforms it into a `Behavior a -> Behavior b` function.
 
-renderLoop :: Behavior Drawing
-renderLoop
-  = map paint loop
+renderLoop :: Keyboard -> Behavior Drawing
+renderLoop keyboard
+  = map paint (loop keyboard)
 
 -- | The `main` function is our application's entry point: this is the function
 -- | that gets executed to run our javascript, so everything must stem from
 -- | here :)
 
-main :: Eff _ Unit
+main :: Effect Unit
 main = do
   maybeCanvas <- getCanvasElementById "canvas"
 
@@ -366,11 +360,12 @@ main = do
     Just canvas -> do
       ctx <- getContext2D canvas
 
-      _ <- setCanvasHeight 400.0 canvas
-      _ <- setCanvasWidth  400.0 canvas
+      _ <- setCanvasHeight canvas 400.0
+      _ <- setCanvasWidth  canvas 400.0
 
       -- Animate the canvas!
-      _ <- animate renderLoop (render ctx)
+      keyboard <- getKeyboard
+      _ <- animate (renderLoop keyboard) (render ctx)
 
       pure unit -- We're done!
 
